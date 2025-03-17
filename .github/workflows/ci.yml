@@ -67,6 +67,7 @@ jobs:
     - run: cmake -B build -DLIBDEFLATE_BUILD_TESTS=1
     - run: cmake --build build --verbose
     - run: DESTDIR=build/install cmake --install build --verbose
+    - run: ls -l build/install/usr/local/lib/
     - run: ctest --test-dir build
     - name: Direct compilation without official build system
       run: cc -O2 -Wall -Werror lib/*{,/*}.c programs/{gzip,prog_util,tgetopt}.c -o libdeflate-gzip
@@ -225,6 +226,7 @@ jobs:
             -DLIBDEFLATE_BUILD_TESTS=1
         cmake --build build --verbose
         DESTDIR=build/install cmake --install build --verbose
+        ls -l build/install/usr/local/lib/
 
   cpu-features-regression-tests:
     name: Test building adler32.c and crc32.c with various flags
