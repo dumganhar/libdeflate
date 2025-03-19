@@ -32,6 +32,19 @@
 
 /* Regular NEON implementation */
 #if HAVE_NEON_INTRIN && CPU_IS_LITTLE_ENDIAN()
+
+#ifdef EMSCRIPTEN
+
+static inline uint32x4_t vqshlq_n_u32(uint32x4_t a, int n) {
+    uint32x4_t result;
+    for (int i = 0; i < 4; i++) {
+        result[i] = (a[i] << n) | (a[i] >> (32 - n));
+    }
+    return result;
+}
+
+#endif // EMSCRIPTEN
+
 #  define adler32_arm_neon	adler32_arm_neon
 #  if HAVE_NEON_NATIVE
      /*

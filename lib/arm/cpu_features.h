@@ -30,7 +30,7 @@
 
 #include "../lib_common.h"
 
-#if defined(ARCH_ARM32) || defined(ARCH_ARM64)
+#if defined(ARCH_ARM32) || defined(ARCH_ARM64) || defined(EMSCRIPTEN)
 
 #define ARM_CPU_FEATURE_NEON		(1 << 0)
 #define ARM_CPU_FEATURE_PMULL		(1 << 1)
@@ -49,6 +49,7 @@
     (defined(__linux__) || \
      (defined(__APPLE__) && defined(ARCH_ARM64)) || \
      (defined(_WIN32) && defined(ARCH_ARM64)))
+
 /* Runtime ARM CPU feature detection is supported. */
 #  define ARM_CPU_FEATURES_KNOWN	(1U << 31)
 extern volatile u32 libdeflate_arm_cpu_features;
@@ -66,7 +67,7 @@ static inline u32 get_arm_cpu_features(void) { return 0; }
 #endif
 
 /* NEON */
-#if defined(__ARM_NEON) || (defined(_MSC_VER) && defined(ARCH_ARM64))
+#if defined(__ARM_NEON) || (defined(_MSC_VER) && defined(ARCH_ARM64)) || defined(EMSCRIPTEN)
 #  define HAVE_NEON(features)	1
 #  define HAVE_NEON_NATIVE	1
 #else
@@ -79,7 +80,7 @@ static inline u32 get_arm_cpu_features(void) { return 0; }
  * r226563 for arm64), hardware floating point support is sufficient.
  */
 #if (defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER)) && \
-	(HAVE_NEON_NATIVE || (GCC_PREREQ(6, 1) && defined(__ARM_FP)))
+	(HAVE_NEON_NATIVE || (GCC_PREREQ(6, 1) && defined(__ARM_FP))) || defined(EMSCRIPTEN)
 #  define HAVE_NEON_INTRIN	1
 #  include <arm_neon.h>
 #else
@@ -94,7 +95,7 @@ static inline u32 get_arm_cpu_features(void) { return 0; }
 #endif
 #if defined(ARCH_ARM64) && HAVE_NEON_INTRIN && \
 	(GCC_PREREQ(7, 1) || defined(__clang__) || defined(_MSC_VER)) && \
-	CPU_IS_LITTLE_ENDIAN() /* untested on big endian */
+	CPU_IS_LITTLE_ENDIAN() || defined(EMSCRIPTEN) /* untested on big endian */
 #  define HAVE_PMULL_INTRIN	1
    /* Work around MSVC's vmull_p64() taking poly64x1_t instead of poly64_t */
 #  ifdef _MSC_VER

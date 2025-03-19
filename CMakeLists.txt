@@ -31,6 +31,8 @@ include(GNUInstallDirs)
 # Declare the options, which can be overridden via 'cmake -DOPTION=VALUE'.
 option(LIBDEFLATE_BUILD_STATIC_LIB "Build the static library" ON)
 option(LIBDEFLATE_BUILD_SHARED_LIB "Build the shared library" ON)
+option(LIBDEFLATE_BUILD_WASI "Build wasm/asmjs with WASI" OFF)
+option(LIBDEFLATE_BUILD_EMSCRIPTEN "Build wasm/asmjs with EMSCRIPTEN" OFF)
 option(LIBDEFLATE_COMPRESSION_SUPPORT "Support compression" ON)
 option(LIBDEFLATE_DECOMPRESSION_SUPPORT "Support decompression" ON)
 option(LIBDEFLATE_ZLIB_SUPPORT "Support the zlib format" ON)
@@ -46,6 +48,60 @@ option(LIBDEFLATE_USE_SHARED_LIB
        of the static library" OFF)
 if(APPLE)
     option(LIBDEFLATE_APPLE_FRAMEWORK "Build as Apple Framework" OFF)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    set(LIBDEFLATE_BUILD_WASI ON)
+    set(LIBDEFLATE_BUILD_STATIC_LIB ON)
+    set(LIBDEFLATE_BUILD_SHARED_LIB OFF)
+    set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
+
+
+    set(CMAKE_C_FLAGS "\
+        -mbulk-memory \
+        -mmutable-globals \
+        -msimd128 \
+        -nostdlib \
+        ")
+    
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    set(BUILD_WASM 1)
+
+    set(CMAKE_CXX_STANDARD 11)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+
+    set(LIBDEFLATE_BUILD_EMSCRIPTEN ON)
+    set(LIBDEFLATE_BUILD_STATIC_LIB ON)
+    set(LIBDEFLATE_BUILD_SHARED_LIB OFF)
+
+    set(CMAKE_EXECUTABLE_SUFFIX ".wasm")
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(ENABLE_CLOSURE_COMPILER 0)
+        set(EXTRA_FLAGS "")
+    else()
+        set(ENABLE_CLOSURE_COMPILER 1)
+        set(EXTRA_FLAGS "-Oz")
+    endif()
+
+    if(LIBDEFLATE_COMPRESSION_SUPPORT)
+        add_definitions(-DLIBDEFLATE_COMPRESSION_SUPPORT=1)
+    else()
+        add_definitions(-DLIBDEFLATE_COMPRESSION_SUPPORT=0)
+    endif()
+
+    if(LIBDEFLATE_DECOMPRESSION_SUPPORT)
+        add_definitions(-DLIBDEFLATE_DECOMPRESSION_SUPPORT=1)
+    else()
+        add_definitions(-DLIBDEFLATE_DECOMPRESSION_SUPPORT=0)
+    endif()
+
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_FLAGS} -msimd128 -mfpu=neon")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_FLAGS} -msimd128 -mfpu=neon -DEMSCRIPTEN_HAS_UNBOUND_TYPE_NAMES=0 -fno-exceptions -fno-rtti")
+    
 endif()
 
 if(LIBDEFLATE_BUILD_TESTS)
@@ -64,7 +120,11 @@ if(NOT LIBDEFLATE_BUILD_STATIC_LIB)
 endif()
 
 # Set common C compiler flags for all targets (the library and the programs).
-set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+if(CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    set(CMAKE_C_FLAGS_RELEASE "-Oz -DNDEBUG")
+else()
+    set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+endif()
 set(CMAKE_C_STANDARD 99)
 if(NOT MSVC)
     check_c_compiler_flag(-Wdeclaration-after-statement HAVE_WDECLARATION_AFTER_STATEMENT)
@@ -277,6 +337,68 @@ if(LIBDEFLATE_BUILD_SHARED_LIB)
     target_compile_options(libdeflate_shared PRIVATE ${LIB_COMPILE_OPTIONS})
     target_link_libraries(libdeflate_shared PRIVATE ${LIB_LINK_LIBRARIES})
     list(APPEND LIB_TARGETS libdeflate_shared)
+endif()
+
+if(LIBDEFLATE_BUILD_WASI)
+    set(LIBDEFLATE_BUILD_GZIP OFF)
+    add_executable(deflate programs/wasi-main.c)
+    target_link_options(deflate PRIVATE
+        "-Wl,--no-entry"
+        "-Wl,--export=libdeflate_adler32"
+        "-Wl,--export=libdeflate_crc32"
+        "-Wl,--export=libdeflate_set_memory_allocator"
+    )
+
+    if(LIBDEFLATE_COMPRESSION_SUPPORT)
+        target_link_options(deflate PRIVATE
+            "-Wl,--export=libdeflate_alloc_compressor"
+            "-Wl,--export=libdeflate_alloc_compressor_ex"
+            "-Wl,--export=libdeflate_deflate_compress"
+            "-Wl,--export=libdeflate_deflate_compress_bound"
+            "-Wl,--export=libdeflate_zlib_compress"
+            "-Wl,--export=libdeflate_zlib_compress_bound"
+            "-Wl,--export=libdeflate_gzip_compress"
+            "-Wl,--export=libdeflate_gzip_compress_bound"
+            "-Wl,--export=libdeflate_free_compressor"
+        )
+    endif()
+
+    if(LIBDEFLATE_DECOMPRESSION_SUPPORT)
+        target_link_options(deflate PRIVATE
+            "-Wl,--export=libdeflate_alloc_decompressor"
+            "-Wl,--export=libdeflate_alloc_decompressor_ex"
+            "-Wl,--export=libdeflate_deflate_decompress"
+            "-Wl,--export=libdeflate_deflate_decompress_ex"
+            "-Wl,--export=libdeflate_zlib_decompress"
+            "-Wl,--export=libdeflate_zlib_decompress_ex"
+            "-Wl,--export=libdeflate_gzip_decompress"
+            "-Wl,--export=libdeflate_gzip_decompress_ex"
+            "-Wl,--export=libdeflate_free_decompressor"
+        )
+    endif()
+
+    target_link_libraries(deflate PRIVATE libdeflate_static)
+endif()
+
+if(LIBDEFLATE_BUILD_EMSCRIPTEN)
+    set(LIBDEFLATE_BUILD_GZIP OFF)
+    set(VERBOSE_LOG 0)
+    set(ENABLE_NEON "-msimd128 -mfpu=neon")
+
+    enable_language(C CXX)
+    add_executable(deflate programs/emscripten-main.cpp)
+
+    target_link_libraries(deflate PRIVATE libdeflate_static)
+
+    # -s EMBIND_AOT=0 -s MALLOC=emmalloc
+    set(EMS_LINK_FLAGS "${EXTRA_FLAGS} ${EVAL_CTOR_FLAG} -s VERBOSE=${VERBOSE_LOG} -s WASM=${BUILD_WASM} -s INITIAL_MEMORY=33554432 -s ALLOW_MEMORY_GROWTH=1 -s DYNAMIC_EXECUTION=0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 ${ENABLE_MEMORY_PROFILING} \
+            -flto ${ENABLE_NEON} --no-entry --bind -s USE_ES6_IMPORT_META=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORT_NAME='deflate' \
+            -s ENVIRONMENT=web -s FILESYSTEM=0 -s NO_EXIT_RUNTIME=1 -s LLD_REPORT_UNDEFINED \
+            -s MIN_SAFARI_VERSION=110000 \
+            --closure=${ENABLE_CLOSURE_COMPILER}")
+
+
+    set_target_properties(deflate PROPERTIES CXX_STANDARD 11 LINK_FLAGS ${EMS_LINK_FLAGS})
 endif()
 
 # Install the static and/or shared library.

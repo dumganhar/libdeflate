@@ -43,6 +43,7 @@
 /* Runtime ARM CPU feature detection is supported. */
 
 #ifdef __linux__
+
 /*
  * On Linux, arm32 and arm64 CPU features can be detected by reading the
  * AT_HWCAP and AT_HWCAP2 values from /proc/self/auxv.

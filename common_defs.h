@@ -324,7 +324,7 @@ typedef size_t machine_word_t;
  */
 #if defined(__BYTE_ORDER__) /* gcc v4.6+ and clang */
 #  define CPU_IS_LITTLE_ENDIAN()  (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) || defined(EMSCRIPTEN)
 #  define CPU_IS_LITTLE_ENDIAN()  true
 #else
 static forceinline bool CPU_IS_LITTLE_ENDIAN(void)
